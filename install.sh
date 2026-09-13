@@ -44,11 +44,13 @@ install_game() {
     chmod +x "$install_dir/play" "$install_dir/install.sh"
     ln -sf "$install_dir/play" "$command_path"
 
-    echo "solitaire_terminal installed. Run it with: solitaire_terminal"
-    case ":$PATH:" in
-        *":$bin_dir:"*) ;;
-        *) echo "Add $bin_dir to your PATH if the command is not found." ;;
-    esac
+    if [ "$mode" = "install" ]; then
+        echo "solitaire_terminal installed. Run it with: solitaire_terminal"
+        case ":$PATH:" in
+            *":$bin_dir:"*) ;;
+            *) echo "Add $bin_dir to your PATH if the command is not found." ;;
+        esac
+    fi
 }
 
 uninstall_game() {
