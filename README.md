@@ -2,7 +2,7 @@
 
 I made solitaire_terminal because I wanted a small solitaire game that I could open and play without leaving the terminal. It is a complete Klondike game written in Python, with no packages to install.
 
-Version 1.0.0 — created by [GRAAAA](https://github.com/GRAAAA).
+Version 1.0.0
 
 ## Install
 
