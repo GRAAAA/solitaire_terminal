@@ -16,7 +16,7 @@ SUITS = ("♠", "♥", "♦", "♣")
 RANKS = ("A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K")
 RED_SUITS = {"♥", "♦"}
 CARD_W, CARD_H, GAP, DOWN_STEP, UP_STEP = 5, 5, 1, 1, 1
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.5"
 APP_CREATOR = "GRAAAA"
 APP_NAME = "solitaire_terminal"
 TERMINAL_WIDTH, TERMINAL_HEIGHT = 42, 24
@@ -351,10 +351,17 @@ class UI:
             else:
                 prompt = "> "
                 self.safe_add(footer_y, ox, prompt, curses.A_DIM)
-                self.safe_add(footer_y, ox + len(prompt), self.game.message, curses.A_DIM)
+                self.safe_add(
+                    footer_y,
+                    ox + len(prompt),
+                    self.game.message[:max(0, w - ox - len(prompt) - 1)],
+                    curses.A_DIM,
+                )
                 stats = f"{self.game.score:03}pts {elapsed//60:02}:{elapsed%60:02} {self.game.moves:03}mv"
-                self.safe_add(footer_y, ox + board_w - len(stats), stats, curses.A_DIM)
-                self.safe_add(footer_y + 1, ox, "arrows move · enter select · d draw · ? keys · q quit", curses.A_DIM)
+                stats_x = w - len(stats) - 1
+                controls = "arrows move · enter select · d draw · ? keys · q quit"
+                self.safe_add(footer_y + 1, ox, controls[:max(0, stats_x - ox - 1)], curses.A_DIM)
+                self.safe_add(footer_y + 1, stats_x, stats, curses.A_DIM)
         if self.help_visible:
             self.draw_help()
         self.s.refresh()
