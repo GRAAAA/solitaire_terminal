@@ -7,7 +7,9 @@ branch="main"
 install_dir="${XDG_DATA_HOME:-$HOME/.local/share}/solitaire_terminal"
 bin_dir="${XDG_BIN_HOME:-$HOME/.local/bin}"
 command_path="$bin_dir/solitaire_terminal"
-raw_url="https://raw.githubusercontent.com/$repo/$branch"
+# GitHub's branch-based raw-content CDN can briefly serve an older revision.
+# This route resolves the branch through github.com before downloading the file.
+raw_url="https://github.com/$repo/raw/refs/heads/$branch"
 
 download() {
     source_file=$1
