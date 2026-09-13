@@ -47,9 +47,10 @@ To install again from a cloned copy, use `./play install`.
 | `H` | Show a possible move |
 | `U` | Undo the last move |
 | `N` | Start a new game |
+| `?` | Show or hide the help screen |
 | Escape | Clear the selection |
 | `Q` | Quit |
 
-The game needs a terminal at least 42 columns wide and 24 rows tall. Unicode and colour support are recommended.
+When the game starts it asks compatible terminal emulators to resize to 42 columns by 24 rows. The game also needs at least that much space; terminals that do not support resizing can be resized manually. Unicode and colour support are recommended.
 
 Empty tableau columns only accept kings, and empty foundations only accept aces.

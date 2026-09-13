@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import curses
+import os
 import random
 import sys
 import time
@@ -18,6 +19,37 @@ CARD_W, CARD_H, GAP, DOWN_STEP, UP_STEP = 5, 5, 1, 1, 1
 APP_VERSION = "1.0.0"
 APP_CREATOR = "GRAAAA"
 APP_NAME = "solitaire_terminal"
+TERMINAL_WIDTH, TERMINAL_HEIGHT = 42, 24
+
+
+def first_run_marker() -> str:
+    """Return the per-user marker used to remember that help was shown."""
+    state_home = os.environ.get("XDG_STATE_HOME")
+    if not state_home:
+        state_home = os.path.join(os.path.expanduser("~"), ".local", "state")
+    return os.path.join(state_home, APP_NAME, "help_seen")
+
+
+def is_first_run() -> bool:
+    return not os.path.exists(first_run_marker())
+
+
+def remember_help_seen() -> None:
+    marker = first_run_marker()
+    try:
+        os.makedirs(os.path.dirname(marker), exist_ok=True)
+        with open(marker, "a", encoding="utf-8"):
+            pass
+    except OSError:
+        # A read-only home directory should not prevent the game from starting.
+        pass
+
+
+def request_terminal_size() -> None:
+    """Ask compatible terminal emulators to resize to the game's canvas."""
+    if sys.stdout.isatty():
+        sys.stdout.write(f"\033[8;{TERMINAL_HEIGHT};{TERMINAL_WIDTH}t")
+        sys.stdout.flush()
 
 
 @dataclass
@@ -179,7 +211,7 @@ class Game:
 
 
 class UI:
-    def __init__(self, screen) -> None:
+    def __init__(self, screen, first_run: bool = False) -> None:
         self.s = screen
         self.game = Game()
         self.zone = "tableau"
@@ -187,6 +219,8 @@ class UI:
         self.depth = 0
         self.selected: tuple[str, int, int] | None = None
         self.deal_progress: int | None = None
+        self.help_visible = False
+        self.first_run = first_run
         self.running = True
         self.init_screen()
 
@@ -253,8 +287,8 @@ class UI:
     def draw(self) -> None:
         self.s.erase()
         h, w = self.s.getmaxyx()
-        if h < 24 or w < 42:
-            self.safe_add(1, 1, "Solitaire needs a terminal at least 42 x 24.", curses.A_BOLD)
+        if h < TERMINAL_HEIGHT or w < TERMINAL_WIDTH:
+            self.safe_add(1, 1, f"Solitaire needs a terminal at least {TERMINAL_WIDTH} x {TERMINAL_HEIGHT}.", curses.A_BOLD)
             self.safe_add(3, 2, f"Current size: {w} x {h}. Resize the window or press Q to quit.")
             self.s.refresh()
             return
@@ -321,12 +355,37 @@ class UI:
                 stats = f"{self.game.score:03}pts {elapsed//60:02}:{elapsed%60:02} {self.game.moves:03}mv"
                 self.safe_add(footer_y, ox + board_w - len(stats), stats, curses.A_DIM)
                 self.safe_add(footer_y + 1, ox, "arrows move · enter select · d draw · ? keys · q quit", curses.A_DIM)
+        if self.help_visible:
+            self.draw_help()
         self.s.refresh()
+
+    def show_intro(self) -> None:
+        """Fade the title in and out, followed by the creator credit."""
+        frames = (
+            ("solitaire terminal", curses.A_DIM),
+            ("solitaire terminal", curses.A_NORMAL),
+            ("solitaire terminal", curses.A_BOLD),
+            ("solitaire terminal", curses.A_NORMAL),
+            ("solitaire terminal", curses.A_DIM),
+            ("", curses.A_NORMAL),
+            (f"by {APP_CREATOR}", curses.A_DIM),
+            (f"by {APP_CREATOR}", curses.A_NORMAL),
+            (f"by {APP_CREATOR}", curses.A_BOLD),
+            (f"by {APP_CREATOR}", curses.A_NORMAL),
+            (f"by {APP_CREATOR}", curses.A_DIM),
+            ("", curses.A_NORMAL),
+        )
+        for line, attr in frames:
+            self.s.erase()
+            h, w = self.s.getmaxyx()
+            self.safe_add(h // 2, max(0, (w - len(line)) // 2), line, attr)
+            self.s.refresh()
+            curses.napms(130)
 
     def animate_deal(self) -> None:
         """Cascade a fresh deal onto the tableau."""
         h, w = self.s.getmaxyx()
-        if h < 24 or w < 42:
+        if h < TERMINAL_HEIGHT or w < TERMINAL_WIDTH:
             return
         self.selected = None
         for count in range(1, 29):
@@ -385,7 +444,7 @@ class UI:
     def animate_motion(self, cards: list[Card], start: tuple[int, int], end: tuple[int, int]) -> None:
         """Move a card or sequence smoothly between two piles."""
         h, w = self.s.getmaxyx()
-        if not cards or h < 24 or w < 42:
+        if not cards or h < TERMINAL_HEIGHT or w < TERMINAL_WIDTH:
             return
         dy, dx = end[0] - start[0], end[1] - start[1]
         steps = max(3, min(9, max(abs(dx), abs(dy))))
@@ -406,7 +465,7 @@ class UI:
         """Give a newly exposed tableau card a quick flip effect."""
         pile = self.game.tableau[col]
         h, w = self.s.getmaxyx()
-        if not pile or h < 24 or w < 42:
+        if not pile or h < TERMINAL_HEIGHT or w < TERMINAL_WIDTH:
             return
         y, x = self.pile_position("tableau", col, len(pile) - 1)
         old_selection = self.selected
@@ -429,7 +488,7 @@ class UI:
     def animated_draw(self) -> None:
         """Slide a card between stock and waste, then reveal or recycle it."""
         h, w = self.s.getmaxyx()
-        if h < 24 or w < 42 or (not self.game.stock and not self.game.waste):
+        if h < TERMINAL_HEIGHT or w < TERMINAL_WIDTH or (not self.game.stock and not self.game.waste):
             self.game.draw()
             self.selected = None
             return
@@ -547,7 +606,7 @@ class UI:
                         return
         self.game.message = "Hint: draw a card." if self.game.stock or self.game.waste else "No move found."
 
-    def show_help(self) -> None:
+    def draw_help(self) -> None:
         h, w = self.s.getmaxyx()
         rows = [
             ("ARROWS", "move / choose stack"),
@@ -558,6 +617,7 @@ class UI:
             ("U", "undo move"),
             ("N", "new deal"),
             ("ESC", "clear selection"),
+            ("?", "hide this help"),
             ("Q", "quit"),
         ]
         self.s.erase()
@@ -577,15 +637,11 @@ class UI:
         foot_y = y + 3 + len(rows)
         self.safe_add(foot_y, x, "├" + "─" * (panel_w - 2) + "┤", curses.A_DIM)
         credit = f"  Created by {APP_CREATOR}"[:panel_w - 2].ljust(panel_w - 2)
-        footer = "  press any key to return"[:panel_w - 2].ljust(panel_w - 2)
+        footer = "  press ? to return"[:panel_w - 2].ljust(panel_w - 2)
         self.safe_add(foot_y + 1, x, "│" + credit + "│", curses.A_DIM)
         self.safe_add(foot_y + 1, x + 3, f"Created by {APP_CREATOR}"[:panel_w - 4], curses.A_BOLD)
         self.safe_add(foot_y + 2, x, "│" + footer + "│", curses.A_DIM)
         self.safe_add(foot_y + 3, x, "╰" + "─" * (panel_w - 2) + "╯", curses.A_DIM)
-        self.s.refresh()
-        self.s.timeout(-1)
-        self.s.getch()
-        self.s.timeout(250)
 
     def confirm_new(self) -> None:
         self.game.message = "Start a new deal? Press Y to confirm."
@@ -614,6 +670,16 @@ class UI:
     def handle(self, key: int) -> None:
         if key == -1:
             return
+        if key == ord("?"):
+            self.help_visible = not self.help_visible
+            if self.help_visible:
+                remember_help_seen()
+            elif self.first_run:
+                self.first_run = False
+                self.animate_deal()
+            return
+        if self.help_visible:
+            return
         if key in (ord("q"), ord("Q")):
             self.running = False
         elif key in (ord("n"), ord("N")):
@@ -627,8 +693,6 @@ class UI:
             self.auto()
         elif key in (ord("h"), ord("H")):
             self.hint()
-        elif key == ord("?"):
-            self.show_help()
         elif key in (10, 13, curses.KEY_ENTER):
             self.activate()
         elif key == 27:
@@ -652,7 +716,12 @@ class UI:
             self.depth = 0
 
     def run(self) -> None:
-        self.animate_deal()
+        self.show_intro()
+        if self.first_run:
+            self.help_visible = True
+            remember_help_seen()
+        else:
+            self.animate_deal()
         while self.running:
             if self.game.won:
                 self.win_screen()
@@ -678,7 +747,11 @@ def main() -> None:
         raise SystemExit(2)
 
     try:
-        curses.wrapper(lambda screen: UI(screen).run())
+        first_run = is_first_run()
+        request_terminal_size()
+        # Give the terminal a moment to report its new dimensions to curses.
+        time.sleep(0.08)
+        curses.wrapper(lambda screen: UI(screen, first_run).run())
     except KeyboardInterrupt:
         pass
 
