@@ -36,9 +36,18 @@ install_game() {
         cp "$script_dir/play" "$install_dir/play"
         cp "$script_dir/install.sh" "$install_dir/install.sh"
     else
-        download solitaire.py "$install_dir/solitaire.py"
-        download play "$install_dir/play"
-        download install.sh "$install_dir/install.sh"
+        staging_dir=$(mktemp -d "${TMPDIR:-/tmp}/solitaire_terminal.XXXXXX")
+        trap 'rm -rf "$staging_dir"' EXIT HUP INT TERM
+
+        download solitaire.py "$staging_dir/solitaire.py"
+        download play "$staging_dir/play"
+        download install.sh "$staging_dir/install.sh"
+
+        mv "$staging_dir/solitaire.py" "$install_dir/solitaire.py"
+        mv "$staging_dir/play" "$install_dir/play"
+        mv "$staging_dir/install.sh" "$install_dir/install.sh"
+        rmdir "$staging_dir"
+        trap - EXIT HUP INT TERM
     fi
 
     chmod +x "$install_dir/play" "$install_dir/install.sh"
